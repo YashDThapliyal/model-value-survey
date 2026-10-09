@@ -1,0 +1,7 @@
+{
+  "model": "Qwen/Qwen2.5-3B-Instruct",
+  "mode": "chat",
+  "loader": "AutoModelForCausalLM",
+  "generations": 819,
+  "seconds": 71.5
+}

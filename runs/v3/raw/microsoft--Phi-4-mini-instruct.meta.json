@@ -1,0 +1,7 @@
+{
+  "model": "microsoft/Phi-4-mini-instruct",
+  "mode": "chat",
+  "loader": "AutoModelForCausalLM",
+  "generations": 819,
+  "seconds": 74.6
+}

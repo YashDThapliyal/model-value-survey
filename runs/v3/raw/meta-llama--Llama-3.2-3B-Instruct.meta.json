@@ -1,0 +1,7 @@
+{
+  "model": "meta-llama/Llama-3.2-3B-Instruct",
+  "mode": "chat",
+  "loader": "AutoModelForCausalLM",
+  "generations": 819,
+  "seconds": 89.0
+}

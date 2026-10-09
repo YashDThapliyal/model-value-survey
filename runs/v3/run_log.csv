@@ -1,0 +1,17 @@
+model,status,started,finished,disk_free_gb_start,disk_free_gb_end,weights_deleted,note
+google/gemma-2-2b-it,ok,2026-10-08 02:24:38,2026-10-08 02:28:03,31.26,26.96,True,disk free before delete 21.71 GB
+google/gemma-3-270m-it,ok,2026-10-08 02:28:15,2026-10-08 02:29:17,28.03,27.74,True,first-token CSV: ok | disk free before delete 27.17 GB
+google/gemma-3-1b-it,ok,2026-10-08 02:29:17,2026-10-08 02:31:02,27.74,26.67,True,disk free before delete 24.63 GB
+meta-llama/Llama-3.2-1B-Instruct,ok,2026-10-08 02:31:02,2026-10-08 02:32:50,26.67,27.74,True,disk free before delete 25.25 GB
+Qwen/Qwen2.5-Math-1.5B,ok,2026-10-08 02:32:50,2026-10-08 02:35:23,27.74,26.65,True,disk free before delete 23.55 GB
+deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B,failed,2026-10-08 02:35:23,2026-10-08 02:35:28,26.65,26.65,False,"sample.py exit 1:   File ""scripts/survey/v3/sample.py"", line 69, in run /     raise ValueError(mode) / ValueError: chat_thinking | no cache entry to delete | disk free before delete 26.65 GB"
+Qwen/Qwen3-1.7B,ok,2026-10-08 02:35:28,2026-10-08 02:38:19,26.65,26.66,True,disk free before delete 22.58 GB
+google/gemma-1.1-2b-it,ok,2026-10-08 02:38:19,2026-10-08 02:42:36,26.66,26.36,True,first-token CSV: ok | disk free before delete 21.33 GB
+HuggingFaceTB/SmolLM3-3B,ok,2026-10-08 02:42:36,2026-10-08 02:47:43,26.36,26.36,True,disk free before delete 20.19 GB
+Qwen/Qwen2.5-3B-Instruct,ok,2026-10-08 02:47:43,2026-10-08 02:51:44,26.36,25.28,True,disk free before delete 19.1 GB
+meta-llama/Llama-3.2-3B-Instruct,ok,2026-10-08 02:51:44,2026-10-08 02:56:01,25.28,26.36,True,disk free before delete 19.93 GB
+microsoft/Phi-4-mini-instruct,ok,2026-10-08 02:56:01,2026-10-08 03:00:41,26.36,25.28,True,disk free before delete 17.59 GB
+Qwen/Qwen3-4B,ok,2026-10-08 03:00:41,2026-10-08 03:05:39,25.28,24.22,True,disk free before delete 16.16 GB
+google/gemma-3-4b-it,ok,2026-10-08 03:05:39,2026-10-08 03:11:13,24.22,23.55,True,disk free before delete 14.9 GB
+google/gemma-4-E2B-it,ok,2026-10-08 03:11:13,2026-10-08 03:19:24,23.55,23.3,True,disk free before delete 13.02 GB
+deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B,ok,2026-10-08 03:19:37,2026-10-08 03:40:53,23.95,29.19,True,disk free before delete 25.63 GB

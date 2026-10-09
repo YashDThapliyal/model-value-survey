@@ -1,0 +1,7 @@
+{
+  "model": "google/gemma-4-E2B-it",
+  "mode": "chat",
+  "loader": "AutoModelForCausalLM",
+  "generations": 819,
+  "seconds": 129.1
+}

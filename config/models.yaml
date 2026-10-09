@@ -1,0 +1,139 @@
+# Candidate models for the next-token log-prob value survey.
+# Extends "Reward Models Inherit Value Biases from Pretraining" (Christian et al.)
+# Verify access / size / chat template with: .venv/bin/python scripts/check_access.py
+#
+# Hub facts below were checked on 2026-10-07 (unauthenticated). All 11 candidate
+# IDs resolve on the Hub, so no substitutions were needed.
+
+# prompt_mode: chat | chat_no_think (enable_thinking=False) | chat_empty_think_prefill | raw (no template)
+models:
+- id: meta-llama/Llama-3.2-1B-Instruct
+  family: llama-3.2
+  params: 1B
+  role: instruct
+  notes: Gated (manual approval, Llama 3.2 Community License).
+  prompt_mode: chat
+  status: done
+- id: meta-llama/Llama-3.2-3B-Instruct
+  family: llama-3.2
+  params: 3B
+  role: instruct
+  notes: Gated (manual approval, Llama 3.2 Community License).
+  prompt_mode: chat
+  status: done
+- id: google/gemma-2-2b-it
+  family: gemma-2
+  params: 2B
+  role: instruct
+  notes: Gated (accept Gemma terms on the Hub).
+  prompt_mode: chat
+  status: done
+- id: google/gemma-3-1b-it
+  family: gemma-3
+  params: 1B
+  role: instruct
+  notes: Gated (accept Gemma terms). Text-only (the 1B is not multimodal).
+  prompt_mode: chat
+  status: done
+- id: google/gemma-3-4b-it
+  multimodal: true
+  family: gemma-3
+  params: 4B
+  role: instruct
+  notes: Gated. Multimodal (image-text-to-text); weights include a SigLIP vision tower, so on-disk size
+    exceeds a text-only 4B. Load the language model only (e.g. Gemma3ForCausalLM / text config) for text
+    log-probs.
+  prompt_mode: chat
+  status: done
+- id: Qwen/Qwen2.5-3B-Instruct
+  family: qwen-2.5
+  params: 3B
+  role: instruct
+  notes: Ungated. Qwen research license (not Apache) for the 3B size.
+  prompt_mode: chat
+  status: done
+- id: Qwen/Qwen3-1.7B
+  family: qwen-3
+  params: 1.7B
+  role: instruct
+  notes: Hybrid thinking/non-thinking post-trained model (no separate -Instruct repo). Use enable_thinking=False
+    in the chat template for direct answers.
+  prompt_mode: chat_no_think
+  status: done
+- id: Qwen/Qwen3-4B
+  family: qwen-3
+  params: 4B
+  role: instruct
+  notes: Hybrid thinking model; same enable_thinking caveat as Qwen3-1.7B.
+  prompt_mode: chat_no_think
+  status: done
+- id: microsoft/Phi-4-mini-instruct
+  family: phi-4
+  params: 3.8B
+  role: instruct
+  notes: Ungated, MIT license.
+  prompt_mode: chat
+  status: done
+- id: HuggingFaceTB/SmolLM3-3B
+  family: smollm-3
+  params: 3B
+  role: instruct
+  notes: Instruct/reasoning hybrid (think / no_think via system prompt flags). Fully open training data,
+    useful for tracing pretraining influences.
+  prompt_mode: chat_no_think
+  status: done
+- id: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+  family: deepseek-r1-distill
+  params: 1.5B
+  role: reasoning-distill
+  notes: SFT on R1 reasoning traces starting from Qwen/Qwen2.5-Math-1.5B (see suggestions). Emits <think>
+    blocks; one-word answers need forcing.
+  prompt_mode: chat_empty_think_prefill
+  status: done
+- id: Qwen/Qwen2.5-Math-1.5B
+  family: qwen-2.5-math
+  params: 1.5B
+  role: base
+  notes: Pretrained math-specialised base (not instruction-tuned); prompt with plain-text completion format,
+    not a chat template. Approved 2026-10-08 as baseline for the DeepSeek distill; raw prompt, mirroring
+    the authors' handling of pretrained models.
+  prompt_mode: raw
+  status: done
+- id: google/gemma-4-E2B-it
+  multimodal: true
+  family: gemma-4
+  params: 2B effective (5.1B total)
+  role: instruct
+  notes: Ungated, Apache-2.0. Multimodal (any-to-any); 10.2 GB bf16 on disk. Tight fit in 18 GB unified
+    memory at bf16. Approved 2026-10-08 as the optional LAST model.
+  prompt_mode: chat
+  status: done
+  optional: true
+  run_last: true
+- id: google/gemma-4-E4B-it
+  multimodal: true
+  family: gemma-4
+  params: 4B effective (8.0B total)
+  role: instruct
+  notes: Ungated, Apache-2.0. Multimodal (any-to-any); 16.0 GB bf16 on disk. Does not fit at bf16 within
+    the MPS budget; would need quantization or loading the text decoder only. Skipped per user decision
+    2026-10-08.
+  prompt_mode: chat
+  status: skipped
+- id: google/gemma-1.1-2b-it
+  family: gemma-1.1
+  params: 2.5B
+  role: instruct
+  notes: Added for PLAN_V3 (Gemma generations). Gated, granted 2026-10-08.
+  prompt_mode: chat
+  status: done
+- id: google/gemma-3-270m-it
+  family: gemma-3
+  params: 0.27B
+  role: instruct
+  notes: Added for PLAN_V3 (Gemma generations). Gated, granted 2026-10-08. Text-only.
+  prompt_mode: chat
+  status: done
+suggestions:
+  note: 'All suggestions resolved 2026-10-08: Qwen2.5-Math-1.5B and gemma-4-E2B-it approved (moved to
+    models), gemma-4-E4B-it skipped (kept in models with status skipped).'

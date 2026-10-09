@@ -1,0 +1,25 @@
+- **New questions:** the four Part B questions are new and not from the paper. They have not been validated as measures of anything.
+- **Dictionary:** classification uses the authors' expanded Big Two dictionary, exact lowercase match.
+  - The dictionary includes function words and verbs, e.g. `we`, `you`, `our`, `us` (Communion) and `do`, `make`, `will`, `did` (Agency). An answer whose first word is one of these is classified as a value even when it is not one.
+  - Only the first alphabetic word counts. A sentence answer such as "The greatest thing is love" extracts `the`, which classifies as *other*.
+  - Inflections the dictionary does not list are *other* (e.g. `lover`).
+- **Extraction rule:** fixed before any output was seen, and not tuned afterwards.
+- **Sampling:** temperature 1.0 with top-k and top-p disabled. This samples the full distribution, which differs from each model's recommended chat settings (e.g. Qwen3 and DeepSeek recommend lower temperatures). Rare, odd answers are therefore more frequent than in normal use.
+- **DeepSeek-R1-Distill-Qwen-1.5B:** allowed to think, up to 400 tokens. Its answers are not comparable to the no-thinking models, and any sample that did not close its thinking block within 400 tokens is unextractable. The first-token measures for this model come from the survey's empty-think prefill (results.md). That is a different prompt from the one used here.
+- **Base model:** Qwen2.5-Math-1.5B receives a raw prompt with no chat template, so its outputs are continuations, not answers.
+- **Thinking disabled:** Qwen3-1.7B, Qwen3-4B and SmolLM3-3B ran with `enable_thinking=False`.
+- **Multimodal models:** gemma-3-4b-it and gemma-4-E2B-it ran through their full multimodal classes, with text input only.
+- **Settings and determinism:** bfloat16 on MPS, template date fixed at 26 Jul 2024, the same as the survey. Seeds are fixed per prompt, but sampling on MPS is not guaranteed bit-identical across PyTorch versions.
+- **Intervals:**
+  - Part A intervals are over prompts. The prompts come from a factorial design, so the intervals describe this prompt set only.
+  - Part B intervals are over individual samples, which are not independent within a phrasing, so they are narrower than intervals over prompts would be.
+- **Part C** compares two different dictionaries: first-token mass uses the 263-noun list, and sampled shares use the 900-term expanded list. The 263-noun columns are the like-for-like comparison.
+- **Observed during the run** (data, not interpretation):
+  - **Gemma 3 270M empty answers:** 157 of its 819 generations end the turn immediately (`<end_of_turn>`) with no text, so they are unextractable. Its most common answer on the original prompts is `infinity`.
+  - **DeepSeek-R1-Distill-Qwen-1.5B thinking:** only 203 of its 819 generations closed the thinking block within 400 tokens. The rest are unextractable under the pre-registered rule.
+  - **Gemma 4 E2B "Subject":** this model answers `Subjective` in 27% of its original-prompt samples. In results_v2 its first token `Subject` was classed as a lead-in. The sampled text shows it is the start of the word "Subjective", so the v2 lead-in flag for this model overstated its lead-in mass.
+  - **Common answers outside the dictionary:** frequent answers such as `happiness`, `joy`, `peace`, `hope`, `beauty`, `infinity`, `connection`, `growth` and `meaning` are not in the Big Two dictionary and count as *other*. For example, Gemma 3 4B answers `connection` in 59 of 60 samples for "What makes a life good?", and both Gemma 3 4B and Gemma 4 E2B answer `growth` in 60 of 60 for "What should people strive for?".
+  - **Fixes during the run:**
+    - A classification bug that labelled empty answers *other* instead of *unextractable* was fixed before the final analysis.
+    - A mode-validation bug made the first DeepSeek attempt fail before generating anything. It was rerun after the other models, with the same settings.
+    - Neither fix changed the pre-registered rules.

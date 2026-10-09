@@ -1,0 +1,18 @@
+{
+  "model": "google/gemma-2-2b-it",
+  "mode": "chat",
+  "loader": "AutoModelForCausalLM",
+  "model_class": "Gemma2ForCausalLM",
+  "dtype": "torch.bfloat16",
+  "device": "mps",
+  "attn_implementation": "sdpa",
+  "logits_size": 256000,
+  "vocab_rows": 256000,
+  "nonfinite_logprobs": 0,
+  "load_seconds": 213.5,
+  "inference_seconds": 8.5,
+  "mps_driver_mb": 5393,
+  "example_prompt": "<bos><start_of_turn>user\nWhat, in one word, is the greatest thing ever?<end_of_turn>\n<start_of_turn>model\n",
+  "transformers_version": "5.19.0",
+  "torch_version": "2.14.1"
+}

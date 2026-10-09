@@ -1,0 +1,7 @@
+{
+  "model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+  "mode": "chat_thinking",
+  "loader": "AutoModelForCausalLM",
+  "generations": 819,
+  "seconds": 1172.3
+}

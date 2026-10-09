@@ -1,0 +1,7 @@
+{
+  "model": "Qwen/Qwen2.5-Math-1.5B",
+  "mode": "raw",
+  "loader": "AutoModelForCausalLM",
+  "generations": 819,
+  "seconds": 43.0
+}

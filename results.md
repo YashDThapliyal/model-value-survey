@@ -1,0 +1,760 @@
+# Results: value-bias survey of small open models (local, Apple M3 Pro)
+
+Run 2026-10-08, following `PLAN.md`. This file reports data and flags surprises; it does not interpret them.
+Method: next-token log-probabilities for the 54 prompts of Christian et al. (ICLR 2026), scored with the
+authors' Big Two (Agency/Communion) noun ranking, same as their `figures/generate_figure_2.py`.
+
+## Status of every model in `config/models.yaml`
+
+| Model | Status | Prompt mode | Notes |
+|---|---|---|---|
+| meta-llama/Llama-3.2-1B-Instruct | **ok** | chat | Also in the paper. Weights were already cached from the smoke test. |
+| meta-llama/Llama-3.2-3B-Instruct | **ok** (Gate C model) | chat | Also in the paper. Generated during Gate C and reused. |
+| google/gemma-2-2b-it | **ok** (Gate C model) | chat | Also in the paper. Generated during Gate C and reused. |
+| google/gemma-3-1b-it | **ok** (2nd attempt) | chat | 1st attempt failed writing the CSV (see Failures); rerun succeeded. |
+| google/gemma-3-4b-it | **ok** | chat | Multimodal; loaded as `Gemma3ForConditionalGeneration` (vision tower loaded, unused). |
+| Qwen/Qwen2.5-3B-Instruct | **ok** | chat | Template injects a default Qwen system prompt. |
+| Qwen/Qwen3-1.7B | **ok** | chat_no_think | `enable_thinking=False`. |
+| Qwen/Qwen3-4B | **ok** | chat_no_think | `enable_thinking=False`. |
+| microsoft/Phi-4-mini-instruct | **ok** | chat | |
+| HuggingFaceTB/SmolLM3-3B | **ok** | chat_no_think | `enable_thinking=False`; template injects a date. |
+| deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B | **ok, empty-think workaround** | chat_empty_think_prefill | Assistant turn prefilled with `<think>\n\n</think>\n\n`. |
+| Qwen/Qwen2.5-Math-1.5B | **ok** | raw | Base model; raw prompt, no template (authors' "pretrained" path). |
+| google/gemma-4-E2B-it | **ok** (optional, run last) | chat | Multimodal; loaded as `Gemma4ForConditionalGeneration`. Loaded without running out of memory (10.8 GB MPS). |
+| google/gemma-4-E4B-it | **skipped** | — | Skipped per user decision. |
+
+No model was dropped for lack of access.
+
+## Gates
+
+| Gate | Result | Evidence |
+|---|---|---|
+| A: access | **PASS**: all 13 models accessible (5 gated ones granted) | `access_report.md`, `runs/gate_a_check_access.log` |
+| B: smoke test | **PASS**: no NaN/Inf in float16 or bfloat16 on MPS (Llama-3.2-1B) | `runs/gate_b_smoke_test.log` |
+| C: validation vs authors | **PASS**: see below | `runs/gate_c.md` |
+
+Gate C, local MPS run vs the authors' precomputed files (Spearman over in-vocabulary Big Two nouns, per prompt):
+
+| Model | Big Two words | Median ρ | Min ρ | Top-15 overlap (greatest_ever_one) |
+|---|---|---|---|---|
+| google/gemma-2-2b-it | 152 | 0.9998 | 0.9995 | 15/15 |
+| meta-llama/Llama-3.2-3B-Instruct | 82 | 0.9950 | 0.9859 | 12/15 |
+
+Nothing was adjusted to pass. Precision, date and attention settings were fixed in `runs/decisions.md` before Gate C ran.
+Diagnostic, not a gate: the same comparison for Llama-3.2-1B-Instruct gives median ρ 0.9836, min 0.8722, mostly on negative prompts
+(`runs/diagnostic_llama1b_vs_authors.md`).
+
+## Fixed settings (recorded in `runs/decisions.md`)
+
+- **Precision:** bfloat16 for every model (the authors' dtype). Logits are cast to float32 before log_softmax.
+- **Date:** every chat template that injects a date sees **26 Jul 2024**. This is the fallback hard-coded in Meta's Llama 3.x template. Affected: both Llama 3.2 models and SmolLM3.
+- **Device:** MPS, batch 1, `use_cache=False`, one forward pass per prompt. torch 2.14.1, transformers 5.19.0.
+- **Attention:** library default (SDPA), as in the authors' code.
+- **Output:** the authors' CSV format, one file per model in `data/logprobs/` (2.3 GB total), plus a `.meta.json` per model.
+
+## Chart: Agency minus Communion gap, positive prompts
+
+![gap chart](results/gap_positive.png)
+
+Gap = median rank(Agency) − median rank(Communion), using the words that are single tokens in **every** model (29 Agency + 49 Communion).
+Rank 1 = most likely. A negative gap means Agency nouns ranked higher; a positive gap means Communion nouns ranked higher.
+Each value is the median, over the 27 positive prompts, of the per-prompt median rank. Paper points are computed from the authors' published files with the same code.
+
+## Per-model median ranks: each model's own single-token Big Two nouns
+
+Word counts differ by tokenizer, so own-vocabulary ranks are **not comparable across tokenizers** (Gemma ranks run up to about 150, Llama/Qwen up to about 80).
+"pos" = 27 positive prompts, "neg" = 27 negative prompts. Each value is the median over prompts of the per-prompt median rank.
+
+| Source   | Model                                       |   Agency words |   Communion words |   Agency (pos) |   Communion (pos) |   Gap (pos) |   Agency (neg) |   Communion (neg) |   Gap (neg) |
+|:---------|:--------------------------------------------|---------------:|------------------:|---------------:|------------------:|------------:|---------------:|------------------:|------------:|
+| local    | Llama-3.2-1B-Instruct                       |             32 |                50 |          36.5  |             44.5  |       -8    |          39.5  |             43    |       -3.5  |
+| local    | Llama-3.2-3B-Instruct                       |             32 |                50 |          43    |             40.5  |        2.5  |          45.5  |             39.75 |        5.75 |
+| local    | gemma-2-2b-it                               |             65 |                87 |          89.5  |             69    |       20.5  |          85    |             73.5  |       11.5  |
+| local    | gemma-3-1b-it                               |             57 |                76 |          66    |             69.5  |       -3.5  |          53    |             78.5  |      -25.5  |
+| local    | gemma-3-4b-it [multimodal]                  |             57 |                76 |          68    |             66.25 |        1.75 |          76.5  |             63.5  |       13    |
+| local    | Qwen2.5-3B-Instruct                         |             32 |                50 |          46.5  |             36.5  |       10    |          38    |             44.5  |       -6.5  |
+| local    | Qwen3-1.7B                                  |             32 |                50 |          33.5  |             48.5  |      -15    |          33.25 |             47.5  |      -14.25 |
+| local    | Qwen3-4B                                    |             32 |                50 |          34    |             48.5  |      -14.5  |          39.5  |             43    |       -3.5  |
+| local    | Phi-4-mini-instruct                         |             30 |                50 |          39.25 |             45    |       -5.75 |          29    |             46.5  |      -17.5  |
+| local    | SmolLM3-3B                                  |             32 |                50 |          38.5  |             44.5  |       -6    |          37    |             44    |       -7    |
+| local    | DeepSeek-R1-Distill-Qwen-1.5B [empty-think] |             32 |                50 |          41    |             42    |       -1    |          48.25 |             37.5  |       10.75 |
+| local    | Qwen2.5-Math-1.5B [base/raw]                |             32 |                50 |          41.5  |             41.5  |        0    |          41    |             41.5  |       -0.5  |
+| local    | gemma-4-E2B-it [multimodal]                 |             57 |                76 |          77    |             61.5  |       15.5  |          62.5  |             69.5  |       -7    |
+| paper    | Gemma 2 2B [pretrained]                     |             65 |                87 |          78    |             72.5  |        5.5  |          76    |             77    |       -1    |
+| paper    | Gemma 2 IT 2B                               |             65 |                87 |          89    |             69    |       20    |          85    |             73    |       12    |
+| paper    | Gemma 2 IT 9B                               |             65 |                87 |          89.5  |             65.5  |       24    |          84.5  |             72    |       12.5  |
+| paper    | Gemma 2 IT 27B                              |             65 |                87 |          84.5  |             70    |       14.5  |          92    |             68    |       24    |
+| paper    | Llama 3.2 3B [pretrained]                   |             32 |                50 |          40    |             42    |       -2    |          44    |             40    |        4    |
+| paper    | Llama 3.2 3B Instruct                       |             32 |                50 |          43.5  |             40.5  |        3    |          44.5  |             40.5  |        4    |
+| paper    | Llama 3.2 1B Instruct                       |             32 |                50 |          36    |             46    |      -10    |          38    |             45.5  |       -7.5  |
+| paper    | Llama 3 8B Instruct                         |             32 |                50 |          39.5  |             44    |       -4.5  |          39    |             43    |       -4    |
+| paper    | Llama 3.1 8B Instruct                       |             32 |                50 |          37.25 |             44    |       -6.75 |          37    |             43.5  |       -6.5  |
+| paper    | Llama 3 70B Instruct                        |             32 |                50 |          41.5  |             41.75 |       -0.25 |          39.75 |             43    |       -3.25 |
+| paper    | Llama 3.1 70B Instruct                      |             32 |                50 |          43    |             40.5  |        2.5  |          34.5  |             44.5  |      -10    |
+| paper    | Llama 3.3 70B Instruct                      |             32 |                50 |          40.5  |             41.75 |       -1.25 |          47.25 |             38.5  |        8.75 |
+
+## Per-model median ranks: words shared by every model
+
+Shared set = Big Two nouns that are a single token in all 13 local models and all 12 paper models: **78 words (29 Agency, 49 Communion)**.
+The other tokenizers narrow the set from Llama's 32/50 single-token nouns to 29/49.
+
+| Source   | Model                                       |   Agency words |   Communion words |   Agency (pos) |   Communion (pos) |   Gap (pos) |   Agency (neg) |   Communion (neg) |   Gap (neg) |
+|:---------|:--------------------------------------------|---------------:|------------------:|---------------:|------------------:|------------:|---------------:|------------------:|------------:|
+| local    | Llama-3.2-1B-Instruct                       |             29 |                49 |           38   |              41   |        -3   |           39   |              40   |        -1   |
+| local    | Llama-3.2-3B-Instruct                       |             29 |                49 |           37.5 |              40   |        -2.5 |           41   |              39   |         2   |
+| local    | gemma-2-2b-it                               |             29 |                49 |           48   |              36   |        12   |           38   |              40.5 |        -2.5 |
+| local    | gemma-3-1b-it                               |             29 |                49 |           37   |              43   |        -6   |           27   |              47   |       -20   |
+| local    | gemma-3-4b-it [multimodal]                  |             29 |                49 |           38   |              41   |        -3   |           43   |              37   |         6   |
+| local    | Qwen2.5-3B-Instruct                         |             29 |                49 |           44.5 |              35   |         9.5 |           34   |              44   |       -10   |
+| local    | Qwen3-1.7B                                  |             29 |                49 |           31   |              45   |       -14   |           31   |              46   |       -15   |
+| local    | Qwen3-4B                                    |             29 |                49 |           32   |              46   |       -14   |           36   |              41   |        -5   |
+| local    | Phi-4-mini-instruct                         |             29 |                49 |           38.5 |              42   |        -3.5 |           28   |              45   |       -17   |
+| local    | SmolLM3-3B                                  |             29 |                49 |           36   |              43   |        -7   |           34   |              43   |        -9   |
+| local    | DeepSeek-R1-Distill-Qwen-1.5B [empty-think] |             29 |                49 |           40   |              39   |         1   |           47   |              36   |        11   |
+| local    | Qwen2.5-Math-1.5B [base/raw]                |             29 |                49 |           36   |              41   |        -5   |           36   |              41   |        -5   |
+| local    | gemma-4-E2B-it [multimodal]                 |             29 |                49 |           45.5 |              37   |         8.5 |           36.5 |              41   |        -4.5 |
+| paper    | Gemma 2 2B [pretrained]                     |             29 |                49 |           41   |              37   |         4   |           39   |              40   |        -1   |
+| paper    | Gemma 2 IT 2B                               |             29 |                49 |           48   |              36   |        12   |           38   |              40   |        -2   |
+| paper    | Gemma 2 IT 9B                               |             29 |                49 |           51   |              34   |        17   |           40   |              39   |         1   |
+| paper    | Gemma 2 IT 27B                              |             29 |                49 |           46   |              35   |        11   |           52.5 |              36   |        16.5 |
+| paper    | Llama 3.2 3B [pretrained]                   |             29 |                49 |           37   |              40.5 |        -3.5 |           40   |              39   |         1   |
+| paper    | Llama 3.2 3B Instruct                       |             29 |                49 |           38   |              40   |        -2   |           40   |              39   |         1   |
+| paper    | Llama 3.2 1B Instruct                       |             29 |                49 |           35   |              43   |        -8   |           37   |              43   |        -6   |
+| paper    | Llama 3 8B Instruct                         |             29 |                49 |           39   |              41   |        -2   |           39   |              40   |        -1   |
+| paper    | Llama 3.1 8B Instruct                       |             29 |                49 |           37   |              41   |        -4   |           37   |              41   |        -4   |
+| paper    | Llama 3 70B Instruct                        |             29 |                49 |           40   |              39   |         1   |           39   |              40   |        -1   |
+| paper    | Llama 3.1 70B Instruct                      |             29 |                49 |           39   |              40   |        -1   |           32   |              42   |       -10   |
+| paper    | Llama 3.3 70B Instruct                      |             29 |                49 |           40.5 |              39   |         1.5 |           45   |              37   |         8   |
+
+## Run log
+
+Per-model time, free disk and status are in `runs/run_log.csv`; full logs are in `runs/logs/`. Each model's weights were deleted after its
+CSV was verified (57 columns, row count, all finite, probability mass per prompt within [0.98, 1]). Free disk stayed between 13 and 33 GB.
+No cache entry that existed before this project was touched; all 9 entries in `runs/protected_cache_entries.txt` are still present.
+
+| Model | Loaded class | Logits | CSV rows | Dropped ids | Non-finite | MPS MB | Load s | Infer s |
+|---|---|---|---|---|---|---|---|---|
+| `HuggingFaceTB/SmolLM3-3B` | SmolLM3ForCausalLM | 128256 | 128256 | [] | 0 | 6193 | 221.7 | 10.7 |
+| `Qwen/Qwen2.5-3B-Instruct` | Qwen2ForCausalLM | 151936 | 151665 | [] | 0 | 6873 | 337.0 | 8.2 |
+| `Qwen/Qwen2.5-Math-1.5B` | Qwen2ForCausalLM | 151936 | 151665 | [] | 0 | 3161 | 104.3 | 4.7 |
+| `Qwen/Qwen3-1.7B` | Qwen3ForCausalLM | 151936 | 151669 | [] | 0 | 3793 | 140.9 | 5.2 |
+| `Qwen/Qwen3-4B` | Qwen3ForCausalLM | 151936 | 151669 | [] | 0 | 7937 | 486.5 | 12.2 |
+| `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B` | Qwen2ForCausalLM | 151936 | 151665 | [] | 0 | 4185 | 134.6 | 4.1 |
+| `google/gemma-2-2b-it` | Gemma2ForCausalLM | 256000 | 256000 | [] | 0 | 5393 | 213.5 | 8.5 |
+| `google/gemma-3-1b-it` | Gemma3ForCausalLM | 262144 | 262144 | [262144] | 0 | 2697 | 66.4 | 3.5 |
+| `google/gemma-3-4b-it` | Gemma3ForConditionalGeneration | 262208 | 262145 | [] | 0 | 8337 | 449.6 | 19.6 |
+| `google/gemma-4-E2B-it` | Gemma4ForConditionalGeneration | 262144 | 262144 | [] | 0 | 10825 | 682.2 | 230.2 |
+| `meta-llama/Llama-3.2-1B-Instruct` | LlamaForCausalLM | 128256 | 128256 | [] | 0 | 3089 | 4.4 | 3.3 |
+| `meta-llama/Llama-3.2-3B-Instruct` | LlamaForCausalLM | 128256 | 128256 | [] | 0 | 6913 | 383.3 | 9.3 |
+| `microsoft/Phi-4-mini-instruct` | Phi3ForCausalLM | 200064 | 200029 | [] | 0 | 8369 | 468.8 | 11.8 |
+
+## Failures and fixes during the run
+
+1. **gemma-3-1b-it, 1st attempt failed.** Its tokenizer lists 262,145 entries, but the model has 262,144 output logits. The extra entry is id 262144, the image token. The authors' code would raise the same IndexError. Fix: ids outside the output layer are dropped from the CSV and recorded in meta (one id, 262144). The forward pass and scoring are unchanged. The rerun succeeded.
+2. **Deleting a model folder freed no disk.** huggingface_hub 1.33 keeps a cache-wide shared blob store, and on this machine every download was stored twice. Fix: generation runs with `HF_HUB_DISABLE_SHARED_BLOBS=1`. After each deletion, orphaned shared-store blobs are removed **only if** their sha256 matches one of that model's files on the Hub.
+3. An internal wait loop in the orchestration matched its own command line and hung for about 10 minutes before the gemma-3-1b rerun. It was killed and the rerun started directly. No data was affected.
+
+## Caveats
+
+- **Empty-think workaround (DeepSeek-R1-Distill-Qwen-1.5B):** the reasoning block is closed by prefill, which is not how the model is meant to be prompted. Even so, its most likely next token is "I" (p = 0.86), not a one-word answer.
+- **Thinking disabled:** Qwen3 (both) and SmolLM3 ran with `enable_thinking=False`. For Qwen3 the template inserts an empty `<think>` block. For SmolLM3 it adds `/no_think` to the system block, and the template also omits `<|im_end|>` after its system block (its own template; not changed).
+- **Base model:** Qwen2.5-Math-1.5B received the raw prompt with no template, so its top tokens are continuations (" The", " It").
+- **Multimodal models:** gemma-3-4b-it and gemma-4-E2B-it were loaded with their full multimodal classes, so the vision (and, for Gemma 4, audio) weights were in memory, unused. gemma-3-4b-it has 262,208 logits but 262,145 vocab entries; the 63 padding logits have no CSV row. gemma-4-E2B used 10.8 GB on MPS, and its 54 prompts took 230 s, against 3–20 s for every other model.
+- **System prompts:** Qwen2.5-3B-Instruct's template injects "You are Qwen, created by Alibaba Cloud…", and SmolLM3's injects a metadata and instructions block. Llama 3.2 injects "Cutting Knowledge Date / Today Date". The paper's Llama runs used the authors' own run date, which is unknown, so the Llama prompts are not token-identical to theirs.
+- **Precision:** bfloat16 was chosen to match the authors. In the smoke test, bfloat16 moved the top-15 log-probs by up to 0.115 against float32, while float16 moved them by up to 0.012.
+- **Attention:** under the default SDPA path, Gemma 2's attention-logit soft-capping is not applied (only eager applies it). The authors' setup also used the library default. Gate C matched at ρ 0.9998 regardless.
+- **Tokenizer differences:**
+  - Matching follows the authors: a Big Two noun counts only if it is exactly one vocabulary token, lowercase with no leading space.
+  - Multi-token words are excluded. Single-token word counts: Llama/Qwen/SmolLM 32/50, Phi 30/50, Gemma 2 65/87, Gemma 3/4 57/76.
+  - Capitalised or space-prefixed variants ("Love", " love") are never ranked.
+  - transformers 5 decodes some punctuation tokens with a leading space where the authors' files have none (117 Llama tokens). No Big Two word is affected.
+- **First token only:** the method reads the first answer token. Top tokens are often word fragments ("Creat", "Un") or lead-ins ("I", "Subject", "In").
+
+## Surprises (data only)
+
+1. **The top token and the Big Two gap point different ways for several models.** On greatest_ever_one, Qwen3-1.7B gives p = 0.96 to "Love", gemma-3-1b-it 0.98, gemma-3-4b-it ≈1.0, and gemma-2-2b-it 0.77. Yet the shared-word positive gap is −14 for Qwen3-1.7B and −6/−3 for Gemma 3 (Agency nouns ranked higher), against +12 for Gemma 2. The capitalised token "Love" is not among the ranked words; only lowercase "love" is.
+2. **Our Llama-3.2-1B-Instruct differs from the paper's file more than the 3B does.** Shared-word positive gap: −3 (ours) vs −8 (paper). Own-vocabulary: −8 vs −10. Spearman against the authors' file: median 0.984, minimum 0.872 on "terrible…one" prompts. For the 3B: −2.5 vs −2.0, median ρ 0.995. gemma-2-2b-it: +12 vs +12.
+3. **Gemma generations differ in sign.** Shared-word positive gap: Gemma 2 2B IT +12 (paper 9B +17, 27B +11), Gemma 3 1B −6, Gemma 3 4B −3, Gemma 4 E2B +8.5.
+4. **Qwen generations differ in sign.** Qwen2.5-3B-Instruct +9.5, Qwen3-1.7B −14, Qwen3-4B −14, Qwen2.5-Math-1.5B (base, raw) −5, DeepSeek distill of that base (empty-think) +1.
+5. **gemma-3-1b-it's negative-prompt gap is the largest in the table:** shared −20, own-vocabulary −25.5.
+6. **gemma-4-E2B-it's top next token is "Subject" (p = 0.58), then "**" (0.42)**, rather than an answer word.
+7. **Qwen2.5-3B-Instruct puts p = 0.75 on "Wow"**, and Phi-4-mini's top token is "In" (0.20).
+8. **Both Qwen3 models give exactly the same shared-word positive gap (−14)**, though their top tokens differ ("Love" vs "Wonder").
+
+## Top 15 / bottom 15 tokens, prompt `greatest_ever_one` (full vocabulary)
+
+Bottom-15 tokens are the least likely of the whole vocabulary, often unrelated words or rare subwords.
+
+
+### Llama-3.2-1B-Instruct
+
+`meta-llama/Llama-3.2-1B-Instruct` · prompt `greatest_ever_one` · vocab rows 128256
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 94909 | `` 'Beauty' `` | -0.9899 |
+| 2 | 1844 | `` 'Un' `` | -2.9274 |
+| 3 | 31844 | `` 'Creat' `` | -3.0524 |
+| 4 | 3976 | `` 'Per' `` | -3.3649 |
+| 5 | 29351 | `` 'Love' `` | -3.3649 |
+| 6 | 644 | `` 'In' `` | -3.5524 |
+| 7 | 40 | `` 'I' `` | -3.8024 |
+| 8 | 59742 | `` 'Pers' `` | -3.8024 |
+| 9 | 26695 | `` 'Exist' `` | -4.1149 |
+| 10 | 35075 | `` 'Human' `` | -4.1149 |
+| 11 | 1453 | `` 'Im' `` | -4.1774 |
+| 12 | 30690 | `` 'Phil' `` | -4.2399 |
+| 13 | 35215 | `` 'Experience' `` | -4.2399 |
+| 14 | 4897 | `` 'That' `` | -4.3024 |
+| 15 | 44 | `` 'M' `` | -4.4274 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 128242 | 4967 | `` ' training' `` | -25.4587 |
+| 128243 | 57408 | `` ' Btn' `` | -25.4587 |
+| 128244 | 52642 | `` ' hazards' `` | -25.4899 |
+| 128245 | 93888 | `` ' GetName' `` | -25.4899 |
+| 128246 | 50607 | `` 'acro' `` | -25.5837 |
+| 128247 | 6739 | `` ' Button' `` | -25.6149 |
+| 128248 | 1401 | `` ' key' `` | -25.6774 |
+| 128249 | 14491 | `` ' sections' `` | -25.7087 |
+| 128250 | 24423 | `` ' Monitor' `` | -25.7712 |
+| 128251 | 11360 | `` ' Section' `` | -25.9587 |
+| 128252 | 16572 | `` ' trained' `` | -25.9899 |
+| 128253 | 99033 | `` 'estone' `` | -25.9899 |
+| 128254 | 35967 | `` 'boro' `` | -26.1149 |
+| 128255 | 124791 | `` 'osy' `` | -26.2399 |
+| 128256 | 16346 | `` ' procedures' `` | -27.3024 |
+
+### Llama-3.2-3B-Instruct
+
+`meta-llama/Llama-3.2-3B-Instruct` · prompt `greatest_ever_one` · vocab rows 128256
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 29351 | `` 'Love' `` | -0.9176 |
+| 2 | 4897 | `` 'That' `` | -1.8551 |
+| 3 | 86872 | `` 'Freedom' `` | -1.9176 |
+| 4 | 1844 | `` 'Un' `` | -3.1051 |
+| 5 | 1 | `` '"' `` | -3.7301 |
+| 6 | 94909 | `` 'Beauty' `` | -4.0426 |
+| 7 | 62372 | `` 'Wonder' `` | -4.8551 |
+| 8 | 39 | `` 'H' `` | -4.9176 |
+| 9 | 9374 | `` 'Lib' `` | -4.9801 |
+| 10 | 27588 | `` 'Har' `` | -5.0426 |
+| 11 | 80871 | `` 'Joy' `` | -5.1676 |
+| 12 | 81434 | `` 'Knowledge' `` | -5.2926 |
+| 13 | 42737 | `` 'Friend' `` | -5.4176 |
+| 14 | 7271 | `` 'Op' `` | -5.4801 |
+| 15 | 9685 | `` 'Progress' `` | -5.5426 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 128242 | 20371 | `` ' Track' `` | -23.8864 |
+| 128243 | 13970 | `` ' historical' `` | -23.9176 |
+| 128244 | 21849 | `` ' myth' `` | -23.9176 |
+| 128245 | 30336 | `` ' royal' `` | -23.9176 |
+| 128246 | 2626 | `` ' business' `` | -23.9489 |
+| 128247 | 13041 | `` ' Roman' `` | -23.9489 |
+| 128248 | 20457 | `` ' ghost' `` | -24.0114 |
+| 128249 | 18558 | `` 'ermal' `` | -24.0739 |
+| 128250 | 14875 | `` ' Asian' `` | -24.2614 |
+| 128251 | 104456 | `` 'باش' `` | -24.2926 |
+| 128252 | 13042 | `` ' cultural' `` | -24.4489 |
+| 128253 | 86561 | `` ' Shall' `` | -24.4489 |
+| 128254 | 16036 | `` ' urban' `` | -24.6676 |
+| 128255 | 36899 | `` ' seasonal' `` | -24.6676 |
+| 128256 | 18592 | `` ' Rule' `` | -24.6989 |
+
+### gemma-2-2b-it
+
+`google/gemma-2-2b-it` · prompt `greatest_ever_one` · vocab rows 256000
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 8703 | `` 'Love' `` | -0.2602 |
+| 2 | 688 | `` '**' `` | -2.0102 |
+| 3 | 11780 | `` 'Life' `` | -3.3852 |
+| 4 | 11364 | `` 'Hope' `` | -3.7602 |
+| 5 | 7604 | `` 'Connection' `` | -4.3852 |
+| 6 | 37371 | `` 'Joy' `` | -5.3852 |
+| 7 | 34183 | `` 'Wonder' `` | -6.0102 |
+| 8 | 5231 | `` ' **' `` | -6.2602 |
+| 9 | 122107 | `` 'Happiness' `` | -6.3852 |
+| 10 | 7377 | `` ' Love' `` | -6.5102 |
+| 11 | 236302 | `` '愛' `` | -6.7602 |
+| 12 | 12870 | `` 'love' `` | -6.8852 |
+| 13 | 16176 | `` '❤️' `` | -6.8852 |
+| 14 | 61792 | `` 'LOVE' `` | -7.0102 |
+| 15 | 6443 | `` 'Change' `` | -7.1352 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 255986 | 202617 | `` ' fhew' `` | -48.2602 |
+| 255987 | 204160 | `` ' Tacitus' `` | -48.2602 |
+| 255988 | 157575 | `` ' raiſ' `` | -48.3852 |
+| 255989 | 15502 | `` ' attacks' `` | -48.5102 |
+| 255990 | 92065 | `` ' himſelf' `` | -48.7602 |
+| 255991 | 47267 | `` ' dietary' `` | -48.8852 |
+| 255992 | 102445 | `` ' ſhe' `` | -48.8852 |
+| 255993 | 212248 | `` ' ſeveral' `` | -49.1352 |
+| 255994 | 118318 | `` ' Cæsar' `` | -49.2602 |
+| 255995 | 174788 | `` 'AndEndTag' `` | -49.3852 |
+| 255996 | 204025 | `` ' ویکی\u200cپدیا' `` | -49.3852 |
+| 255997 | 212562 | `` ' Efq' `` | -49.5102 |
+| 255998 | 234323 | `` ' myſelf' `` | -49.7602 |
+| 255999 | 223118 | `` ' aggressor' `` | -49.8852 |
+| 256000 | 234446 | `` ' Monfieur' `` | -50.1352 |
+
+### gemma-3-1b-it
+
+`google/gemma-3-1b-it` · prompt `greatest_ever_one` · vocab rows 262144
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 26462 | `` 'Love' `` | -0.0197 |
+| 2 | 10745 | `` 'Connection' `` | -5.0197 |
+| 3 | 34089 | `` 'Hope' `` | -5.5197 |
+| 4 | 62752 | `` 'Joy' `` | -5.7697 |
+| 5 | 76795 | `` 'Wonder' `` | -5.7697 |
+| 6 | 1018 | `` '**' `` | -7.2697 |
+| 7 | 114296 | `` 'Infinity' `` | -7.6447 |
+| 8 | 66207 | `` 'Impact' `` | -7.8947 |
+| 9 | 146868 | `` 'Meaning' `` | -8.8947 |
+| 10 | 6372 | `` 'That' `` | -9.1447 |
+| 11 | 36623 | `` 'Human' `` | -9.1447 |
+| 12 | 11947 | `` 'Good' `` | -9.7697 |
+| 13 | 36936 | `` 'Mir' `` | -9.7697 |
+| 14 | 74722 | `` 'Beauty' `` | -10.0197 |
+| 15 | 83433 | `` 'Knowledge' `` | -10.0197 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 262130 | 214920 | `` ' jadwal' `` | -75.2697 |
+| 262131 | 10095 | `` ' officer' `` | -75.5197 |
+| 262132 | 53235 | `` ' pests' `` | -75.5197 |
+| 262133 | 140308 | `` ' chromatographic' `` | -75.5197 |
+| 262134 | 14202 | `` ' manufacturer' `` | -75.7697 |
+| 262135 | 50519 | `` ' dermat' `` | -76.0197 |
+| 262136 | 151987 | `` ' comedor' `` | -76.0197 |
+| 262137 | 206814 | `` ' etanol' `` | -76.0197 |
+| 262138 | 40104 | `` ' lipid' `` | -76.2697 |
+| 262139 | 125003 | `` ' attham' `` | -77.0197 |
+| 262140 | 90352 | `` ' budgeting' `` | -77.7697 |
+| 262141 | 34252 | `` ' drilling' `` | -78.7697 |
+| 262142 | 225519 | `` ' drivetrain' `` | -79.0197 |
+| 262143 | 133088 | `` ' arbets' `` | -80.5197 |
+| 262144 | 160702 | `` ' dieting' `` | -81.5197 |
+
+### gemma-3-4b-it [multimodal]
+
+`google/gemma-3-4b-it` · prompt `greatest_ever_one` · vocab rows 262145
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 26462 | `` 'Love' `` | 0.0000 |
+| 2 | 1018 | `` '**' `` | -23.2500 |
+| 3 | 10745 | `` 'Connection' `` | -25.0000 |
+| 4 | 76795 | `` 'Wonder' `` | -25.0000 |
+| 5 | 62752 | `` 'Joy' `` | -25.5000 |
+| 6 | 34089 | `` 'Hope' `` | -27.2500 |
+| 7 | 236798 | `` 'L' `` | -28.0000 |
+| 8 | 11543 | `` ' Love' `` | -29.0000 |
+| 9 | 21867 | `` 'love' `` | -29.7500 |
+| 10 | 192869 | `` 'Happiness' `` | -31.2500 |
+| 11 | 2805 | `` 'Un' `` | -32.5000 |
+| 12 | 2765 | `` ' love' `` | -32.7500 |
+| 13 | 173741 | `` 'LOVE' `` | -32.7500 |
+| 14 | 189049 | `` 'Grat' `` | -32.7500 |
+| 15 | 25242 | `` 'Life' `` | -33.0000 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 262131 | 154748 | `` ' delitos' `` | -136.0000 |
+| 262132 | 179065 | `` ' robberies' `` | -136.0000 |
+| 262133 | 25234 | `` ' decorative' `` | -136.2500 |
+| 262134 | 189004 | `` ' touristic' `` | -136.2500 |
+| 262135 | 37633 | `` ' salaries' `` | -136.5000 |
+| 262136 | 52609 | `` ' inspections' `` | -136.5000 |
+| 262137 | 22436 | `` ' tourist' `` | -136.7500 |
+| 262138 | 65943 | `` ' casualties' `` | -136.7500 |
+| 262139 | 90836 | `` ' killings' `` | -137.5000 |
+| 262140 | 152865 | `` ' importers' `` | -137.5000 |
+| 262141 | 217945 | `` ' teatral' `` | -137.5000 |
+| 262142 | 186464 | `` ' thefts' `` | -137.7500 |
+| 262143 | 105386 | `` ' pharmacological' `` | -138.0000 |
+| 262144 | 147515 | `` ' correctional' `` | -140.0000 |
+| 262145 | 141644 | `` ' apoptotic' `` | -140.5000 |
+
+### Qwen2.5-3B-Instruct
+
+`Qwen/Qwen2.5-3B-Instruct` · prompt `greatest_ever_one` · vocab rows 151665
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 35881 | `` 'Wow' `` | -0.2923 |
+| 2 | 65073 | `` 'Amazing' `` | -2.4173 |
+| 3 | 6091 | `` 'Am' `` | -3.0423 |
+| 4 | 61272 | `` 'Wonder' `` | -3.7923 |
+| 5 | 22600 | `` 'Aw' `` | -4.1673 |
+| 6 | 641 | `` 'In' `` | -4.5423 |
+| 7 | 89655 | `` 'Impossible' `` | -4.7923 |
+| 8 | 21396 | `` 'Great' `` | -4.9173 |
+| 9 | 54 | `` 'W' `` | -5.0423 |
+| 10 | 5775 | `` ' wonder' `` | -5.1673 |
+| 11 | 11395 | `` 'Well' `` | -5.1673 |
+| 12 | 50417 | `` ' awe' `` | -5.4173 |
+| 13 | 3889 | `` 'Per' `` | -5.6673 |
+| 14 | 84643 | `` 'Peace' `` | -5.7923 |
+| 15 | 28251 | `` 'Love' `` | -6.1673 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 151651 | 68992 | `` '_unregister' `` | -44.5423 |
+| 151652 | 81736 | `` 'Intialized' `` | -44.6673 |
+| 151653 | 135729 | `` 'นโย' `` | -44.9173 |
+| 151654 | 83779 | `` 'mPid' `` | -45.0423 |
+| 151655 | 139722 | `` 'rawid' `` | -45.0423 |
+| 151656 | 143427 | `` 'مديرية' `` | -45.0423 |
+| 151657 | 93372 | `` ' UserType' `` | -45.1673 |
+| 151658 | 136245 | `` 'медицинск' `` | -45.1673 |
+| 151659 | 85457 | `` ' LOWER' `` | -45.2923 |
+| 151660 | 143951 | `` 'مفاوضات' `` | -45.6673 |
+| 151661 | 137562 | `` 'صند' `` | -45.9173 |
+| 151662 | 135180 | `` 'температур' `` | -46.2923 |
+| 151663 | 83699 | `` 'FilterWhere' `` | -46.4173 |
+| 151664 | 138883 | `` 'реги' `` | -47.5423 |
+| 151665 | 117294 | `` '新人玩家' `` | -47.7923 |
+
+### Qwen3-1.7B
+
+`Qwen/Qwen3-1.7B` · prompt `greatest_ever_one` · vocab rows 151669
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 28251 | `` 'Love' `` | -0.0397 |
+| 2 | 38015 | `` 'Hope' `` | -4.2897 |
+| 3 | 79771 | `` 'Joy' `` | -4.2897 |
+| 4 | 45090 | `` 'Infinity' `` | -5.9147 |
+| 5 | 36 | `` 'E' `` | -6.0397 |
+| 6 | 25749 | `` 'Life' `` | -6.2897 |
+| 7 | 84643 | `` 'Peace' `` | -6.5397 |
+| 8 | 24058 | `` 'Truth' `` | -6.9147 |
+| 9 | 37310 | `` 'Unity' `` | -7.9147 |
+| 10 | 27522 | `` 'God' `` | -8.5397 |
+| 11 | 78748 | `` 'Wis' `` | -8.5397 |
+| 12 | 39 | `` 'H' `` | -8.9147 |
+| 13 | 43484 | `` 'Ult' `` | -9.0397 |
+| 14 | 85772 | `` 'Freedom' `` | -9.1647 |
+| 15 | 25613 | `` 'Exist' `` | -9.2897 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 151655 | 78510 | `` ' cylindrical' `` | -53.0397 |
+| 151656 | 20057 | `` ' residential' `` | -53.1647 |
+| 151657 | 29986 | `` ' penalties' `` | -53.1647 |
+| 151658 | 47004 | `` ' rentals' `` | -53.2897 |
+| 151659 | 98921 | `` ' backtrack' `` | -53.2897 |
+| 151660 | 29972 | `` ' contractor' `` | -53.5397 |
+| 151661 | 65188 | `` ' grading' `` | -53.6647 |
+| 151662 | 79172 | `` ' coeffs' `` | -53.6647 |
+| 151663 | 80349 | `` ' zipcode' `` | -53.6647 |
+| 151664 | 85645 | `` ' histograms' `` | -53.6647 |
+| 151665 | 36829 | `` ' coefficients' `` | -54.1647 |
+| 151666 | 22515 | `` ' regulatory' `` | -54.5397 |
+| 151667 | 37852 | `` ' scheduling' `` | -54.7897 |
+| 151668 | 30281 | `` ' histogram' `` | -55.2897 |
+| 151669 | 63631 | `` ' preprocessing' `` | -56.1647 |
+
+### Qwen3-4B
+
+`Qwen/Qwen3-4B` · prompt `greatest_ever_one` · vocab rows 151669
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 61272 | `` 'Wonder' `` | -0.5593 |
+| 2 | 28251 | `` 'Love' `` | -2.3093 |
+| 3 | 45090 | `` 'Infinity' `` | -2.3093 |
+| 4 | 641 | `` 'In' `` | -2.5593 |
+| 5 | 1806 | `` 'Un' `` | -3.5593 |
+| 6 | 87655 | `` 'Magn' `` | -3.9343 |
+| 7 | 43538 | `` 'Magic' `` | -4.0593 |
+| 8 | 785 | `` 'The' `` | -4.5593 |
+| 9 | 12509 | `` 'Div' `` | -4.6843 |
+| 10 | 79771 | `` 'Joy' `` | -4.9343 |
+| 11 | 85262 | `` 'Magnitude' `` | -5.0593 |
+| 12 | 33 | `` 'B' `` | -5.4343 |
+| 13 | 44 | `` 'M' `` | -5.4343 |
+| 14 | 19284 | `` 'Super' `` | -5.5593 |
+| 15 | 21666 | `` 'Bel' `` | -5.5593 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 151655 | 94830 | `` 'igrated' `` | -37.2468 |
+| 151656 | 22384 | `` ',’' `` | -37.3093 |
+| 151657 | 119440 | `` '猾' `` | -37.3093 |
+| 151658 | 64701 | `` ' »,' `` | -37.3718 |
+| 151659 | 123362 | `` '劄' `` | -37.3718 |
+| 151660 | 19609 | `` '’,' `` | -37.4968 |
+| 151661 | 49509 | `` 'styleType' `` | -37.6843 |
+| 151662 | 18292 | `` ' »\n\n' `` | -37.7468 |
+| 151663 | 100307 | `` '摇' `` | -37.7468 |
+| 151664 | 101740 | `` '嫌疑' `` | -37.7468 |
+| 151665 | 119515 | `` '臊' `` | -37.7468 |
+| 151666 | 29084 | `` '’\n\n' `` | -38.1843 |
+| 151667 | 133007 | `` 'イメ' `` | -38.2468 |
+| 151668 | 106809 | `` '交叉' `` | -38.4343 |
+| 151669 | 131618 | `` 'lâ' `` | -39.4343 |
+
+### Phi-4-mini-instruct
+
+`microsoft/Phi-4-mini-instruct` · prompt `greatest_ever_one` · vocab rows 200029
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 637 | `` 'In' `` | -1.6098 |
+| 2 | 36 | `` 'E' `` | -2.1098 |
+| 3 | 100226 | `` 'Infinity' `` | -2.3598 |
+| 4 | 1 | `` '"' `` | -2.8598 |
+| 5 | 29686 | `` 'Love' `` | -2.8598 |
+| 6 | 149803 | `` 'Freedom' `` | -2.9848 |
+| 7 | 39 | `` 'H' `` | -3.1098 |
+| 8 | 92164 | `` 'Joy' `` | -3.6098 |
+| 9 | 111573 | `` 'Ful' `` | -4.1098 |
+| 10 | 18174 | `` 'Subject' `` | -4.4848 |
+| 11 | 65867 | `` 'Wonder' `` | -4.4848 |
+| 12 | 104123 | `` 'Beauty' `` | -4.4848 |
+| 13 | 4407 | `` 'Per' `` | -4.6098 |
+| 14 | 2265 | `` 'Un' `` | -4.8598 |
+| 15 | 3764 | `` 'Ser' `` | -4.8598 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 200015 | 64497 | `` ' remar' `` | -35.1567 |
+| 200016 | 98716 | `` ' adept' `` | -35.2524 |
+| 200017 | 153266 | `` ' Economist' `` | -35.3462 |
+| 200018 | 84232 | `` ' ingr' `` | -35.3677 |
+| 200019 | 142538 | `` ' gearing' `` | -35.4927 |
+| 200020 | 177732 | `` ' dispense' `` | -35.5747 |
+| 200021 | 192871 | `` ' rites' `` | -35.5903 |
+| 200022 | 164349 | `` ' vested' `` | -35.6684 |
+| 200023 | 81227 | `` ' remembering' `` | -36.1177 |
+| 200024 | 41566 | `` ' ritual' `` | -36.3833 |
+| 200025 | 30336 | `` ' ceremony' `` | -36.5942 |
+| 200026 | 186189 | `` ' ceremonial' `` | -36.6333 |
+| 200027 | 59322 | `` ' reluct' `` | -36.7505 |
+| 200028 | 120748 | `` ' consolidate' `` | -36.7583 |
+| 200029 | 167374 | `` ' engross' `` | -38.8911 |
+
+### SmolLM3-3B
+
+`HuggingFaceTB/SmolLM3-3B` · prompt `greatest_ever_one` · vocab rows 128256
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 29351 | `` 'Love' `` | -1.8971 |
+| 2 | 90755 | `` 'Impossible' `` | -2.1471 |
+| 3 | 791 | `` 'The' `` | -2.2721 |
+| 4 | 40 | `` 'I' `` | -2.5221 |
+| 5 | 4897 | `` 'That' `` | -2.5221 |
+| 6 | 1844 | `` 'Un' `` | -2.8971 |
+| 7 | 2181 | `` 'It' `` | -2.8971 |
+| 8 | 644 | `` 'In' `` | -3.1471 |
+| 9 | 2028 | `` 'This' `` | -3.2721 |
+| 10 | 1 | `` '"' `` | -3.5221 |
+| 11 | 4054 | `` 'One' `` | -3.8971 |
+| 12 | 26833 | `` 'Life' `` | -4.1471 |
+| 13 | 1623 | `` 'LO' `` | -4.5221 |
+| 14 | 9470 | `` 'Art' `` | -4.6471 |
+| 15 | 80871 | `` 'Joy' `` | -4.6471 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 128242 | 58631 | `` 'zych' `` | -38.0221 |
+| 128243 | 116619 | `` 'iyan' `` | -38.0846 |
+| 128244 | 110894 | `` '’ya' `` | -38.1471 |
+| 128245 | 15974 | `` 'agment' `` | -38.2096 |
+| 128246 | 1775 | `` 'olean' `` | -38.2721 |
+| 128247 | 37266 | `` 'emarks' `` | -38.2721 |
+| 128248 | 88493 | `` 'forcements' `` | -38.3971 |
+| 128249 | 38685 | `` 'awei' `` | -38.4596 |
+| 128250 | 127495 | `` 'ufac' `` | -38.6471 |
+| 128251 | 78074 | `` 'ialized' `` | -38.7096 |
+| 128252 | 90622 | `` "'options" `` | -38.8346 |
+| 128253 | 67674 | `` 'rvine' `` | -39.4596 |
+| 128254 | 107759 | `` 'cih' `` | -39.6471 |
+| 128255 | 103152 | `` 'ecies' `` | -40.7721 |
+| 128256 | 115785 | `` 'ceae' `` | -42.1471 |
+
+### DeepSeek-R1-Distill-Qwen-1.5B [empty-think]
+
+`deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B` · prompt `greatest_ever_one` · vocab rows 151665
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 40 | `` 'I' `` | -0.1465 |
+| 2 | 785 | `` 'The' `` | -2.5215 |
+| 3 | 33464 | `` 'Deep' `` | -4.6465 |
+| 4 | 1 | `` '"' `` | -4.7715 |
+| 5 | 2121 | `` 'As' `` | -4.8965 |
+| 6 | 641 | `` 'In' `` | -5.0215 |
+| 7 | 10022 | `` '"The' `` | -5.2715 |
+| 8 | 1986 | `` 'This' `` | -5.7715 |
+| 9 | 5050 | `` 'My' `` | -6.1465 |
+| 10 | 3838 | `` 'What' `` | -6.2715 |
+| 11 | 7044 | `` '"I' `` | -6.9590 |
+| 12 | 2132 | `` 'It' `` | -7.1465 |
+| 13 | 21390 | `` 'Maybe' `` | -7.6465 |
+| 14 | 13048 | `` 'Hi' `` | -7.8340 |
+| 15 | 15469 | `` 'AI' `` | -7.8965 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 151651 | 7130 | `` ' partial' `` | -29.3340 |
+| 151652 | 912 | `` ' add' `` | -29.5215 |
+| 151653 | 7071 | `` ' figure' `` | -29.5215 |
+| 151654 | 421 | `` ' if' `` | -29.6465 |
+| 151655 | 1008 | `` ' other' `` | -29.7715 |
+| 151656 | 1352 | `` ' form' `` | -30.0840 |
+| 151657 | 773 | `` ' so' `` | -30.3340 |
+| 151658 | 1221 | `` ' then' `` | -30.4590 |
+| 151659 | 47311 | `` ' polynomial' `` | -30.8340 |
+| 151660 | 311 | `` ' to' `` | -31.0215 |
+| 151661 | 323 | `` ' and' `` | -31.0215 |
+| 151662 | 369 | `` ' for' `` | -31.2090 |
+| 151663 | 448 | `` ' with' `` | -31.7090 |
+| 151664 | 264 | `` ' a' `` | -31.7715 |
+| 151665 | 504 | `` ' from' `` | -31.7715 |
+
+### Qwen2.5-Math-1.5B [base/raw]
+
+`Qwen/Qwen2.5-Math-1.5B` · prompt `greatest_ever_one` · vocab rows 151665
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 576 | `` ' The' `` | -1.4473 |
+| 2 | 1084 | `` ' It' `` | -2.6973 |
+| 3 | 320 | `` ' (' `` | -3.0723 |
+| 4 | 358 | `` ' I' `` | -3.0723 |
+| 5 | 362 | `` ' A' `` | -3.3223 |
+| 6 | 3555 | `` ' What' `` | -3.5098 |
+| 7 | 758 | `` ' In' `` | -3.8848 |
+| 8 | 2938 | `` ' That' `` | -4.1973 |
+| 9 | 1096 | `` ' This' `` | -4.2598 |
+| 10 | 2014 | `` ' To' `` | -4.3848 |
+| 11 | 2585 | `` ' How' `` | -4.5098 |
+| 12 | 8429 | `` ' Why' `` | -4.5098 |
+| 13 | 330 | `` ' "' `` | -4.6348 |
+| 14 | 1416 | `` ' If' `` | -4.6973 |
+| 15 | 1597 | `` ' And' `` | -4.6973 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 151651 | 82877 | `` ' confl' `` | -22.0723 |
+| 151652 | 87155 | `` '/Layout' `` | -22.1035 |
+| 151653 | 92394 | `` ' tanker' `` | -22.1660 |
+| 151654 | 52297 | `` ' locales' `` | -22.1973 |
+| 151655 | 95221 | `` ' underside' `` | -22.1973 |
+| 151656 | 35427 | `` 'nels' `` | -22.2285 |
+| 151657 | 89897 | `` ' wholesalers' `` | -22.2910 |
+| 151658 | 95028 | `` '-tank' `` | -22.2910 |
+| 151659 | 58489 | `` ' municipalities' `` | -22.3535 |
+| 151660 | 81735 | `` ' sidewalks' `` | -22.5098 |
+| 151661 | 86123 | `` ' stad' `` | -22.6973 |
+| 151662 | 98811 | `` ' southwestern' `` | -22.6973 |
+| 151663 | 68240 | `` ' veterinary' `` | -22.8223 |
+| 151664 | 82109 | `` ' southeastern' `` | -23.3848 |
+| 151665 | 74969 | `` ' condu' `` | -23.6348 |
+
+### gemma-4-E2B-it [multimodal]
+
+`google/gemma-4-E2B-it` · prompt `greatest_ever_one` · vocab rows 262144
+
+**Top 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 1 | 21288 | `` 'Subject' `` | -0.5531 |
+| 2 | 1018 | `` '**' `` | -0.8656 |
+| 3 | 6372 | `` 'That' `` | -5.8031 |
+| 4 | 236847 | `` 'V' `` | -7.5531 |
+| 5 | 2094 | `` 'This' `` | -8.4906 |
+| 6 | 146868 | `` 'Meaning' `` | -9.5843 |
+| 7 | 7925 | `` 'Answer' `` | -10.6312 |
+| 8 | 236788 | `` 'E' `` | -10.7406 |
+| 9 | 26462 | `` 'Love' `` | -10.8187 |
+| 10 | 3898 | `` 'Int' `` | -11.1781 |
+| 11 | 4976 | `` 'El' `` | -11.3500 |
+| 12 | 236785 | `` '\\' `` | -11.3968 |
+| 13 | 192869 | `` 'Happiness' `` | -11.6390 |
+| 14 | 179306 | `` 'Depends' `` | -11.7875 |
+| 15 | 3637 | `` 'Context' `` | -12.0218 |
+
+**Bottom 15**
+
+| rank | token_id | token_decoded (repr) | log-prob |
+|---:|---:|---|---:|
+| 262130 | 246678 | `` '厝' `` | -41.1781 |
+| 262131 | 100143 | `` 'LockButton' `` | -41.3031 |
+| 262132 | 133664 | `` 'IUpdate' `` | -41.3031 |
+| 262133 | 181170 | `` ' validType' `` | -41.3031 |
+| 262134 | 217699 | `` 'btnClear' `` | -41.3031 |
+| 262135 | 244550 | `` '룡' `` | -41.3031 |
+| 262136 | 45016 | `` 'VideoButton' `` | -41.4281 |
+| 262137 | 160872 | `` ' ConcurrentTask' `` | -41.4281 |
+| 262138 | 179515 | `` 'ProfileAction' `` | -41.4281 |
+| 262139 | 183374 | `` 'TabText' `` | -41.5531 |
+| 262140 | 197398 | `` 'TempBuffer' `` | -41.5531 |
+| 262141 | 225448 | `` ' globalMap' `` | -41.5531 |
+| 262142 | 189298 | `` 'nPort' `` | -41.6781 |
+| 262143 | 226640 | `` ' eTo' `` | -41.9281 |
+| 262144 | 226776 | `` 'SegmentInfo' `` | -42.0531 |
+

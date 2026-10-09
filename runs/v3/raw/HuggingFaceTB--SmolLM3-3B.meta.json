@@ -1,0 +1,7 @@
+{
+  "model": "HuggingFaceTB/SmolLM3-3B",
+  "mode": "chat_no_think",
+  "loader": "AutoModelForCausalLM",
+  "generations": 819,
+  "seconds": 122.3
+}

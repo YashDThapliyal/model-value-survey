@@ -1,0 +1,7 @@
+{
+  "model": "Qwen/Qwen3-4B",
+  "mode": "chat_no_think",
+  "loader": "AutoModelForCausalLM",
+  "generations": 819,
+  "seconds": 72.3
+}
